@@ -1,36 +1,13 @@
 package io.mosip.registration.processor.packet.storage.utils;
 
-import java.io.IOException;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Period;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.commons.lang.StringUtils;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.mosip.kernel.core.exception.ExceptionUtils;
 import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.kernel.core.util.exception.JsonProcessingException;
 import io.mosip.registration.processor.abis.queue.dto.AbisQueueDetails;
 import io.mosip.registration.processor.core.code.ApiName;
 import io.mosip.registration.processor.core.common.rest.dto.ErrorDTO;
+import io.mosip.registration.processor.core.constant.AbisConstant;
 import io.mosip.registration.processor.core.constant.LoggerFileConstant;
 import io.mosip.registration.processor.core.constant.MappingJsonConstants;
 import io.mosip.registration.processor.core.constant.ProviderStageName;
@@ -61,6 +38,25 @@ import io.mosip.registration.processor.status.dao.RegistrationStatusDao;
 import io.mosip.registration.processor.status.dto.InternalRegistrationStatusDto;
 import io.mosip.registration.processor.status.entity.RegistrationStatusEntity;
 import lombok.Data;
+import org.apache.commons.lang.StringUtils;
+import org.assertj.core.util.Lists;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+
+import java.io.IOException;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Period;
+import java.util.*;
 
 /**
  * The Class Utilities.
@@ -598,6 +594,34 @@ public class Utilities {
 
 		return UIN;
 
+	}
+
+
+	public String getUINByHandle(String id, String process, ProviderStageName stageName)
+			throws IOException, ApisResourceAccessException, PacketManagerException, JsonProcessingException {
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+				"Utilities::getUINByHandle()::entry");
+		String handle = packetManagerService.getFieldByMappingJsonKey(id, MappingJsonConstants.CURPID, process, stageName);
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+				"Utilities::getUINByHandle()::handleRetrieved");
+		if (handle != null) {
+			List<String> pathSegments = new ArrayList<>();
+			handle = handle.concat("@curpid");
+			String queryParam = "idType";
+			String queryParamValue = "handle";
+
+			IdResponseDTO1 response = (IdResponseDTO1) restClientService.getApi(ApiName.RETRIEVEIDENTITY, Lists.newArrayList(handle), queryParam, queryParamValue,
+					IdResponseDTO1.class);
+
+			if (response.getResponse() != null) {
+				String jsonString = objMapper.writeValueAsString(response.getResponse().getIdentity());//gsonObj.toJson(response.getResponse());
+				JSONObject identityJson = JsonUtil.objectMapperReadValue(jsonString, JSONObject.class);
+				//JSONObject demographicIdentity = JsonUtil.getJSONObject(identityJson, regProcessorDemographicIdentity);
+				return JsonUtil.getJSONValue(identityJson, AbisConstant.UIN);
+			}
+
+		}
+		return null;
 	}
 
 	/**
