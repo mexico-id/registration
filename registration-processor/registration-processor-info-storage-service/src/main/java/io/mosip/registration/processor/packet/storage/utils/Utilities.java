@@ -606,13 +606,12 @@ public class Utilities {
 				"Utilities::getUINByHandle()::handleRetrieved");
 		if (handle != null) {
 			List<String> pathSegments = new ArrayList<>();
-			handle = handle.concat("@curpid");
+			handle = handle.concat("@curpid").toLowerCase(Locale.ROOT);
 			String queryParam = "idType";
 			String queryParamValue = "handle";
 
 			IdResponseDTO1 response = (IdResponseDTO1) restClientService.getApi(ApiName.RETRIEVEIDENTITY, Lists.newArrayList(handle), queryParam, queryParamValue,
 					IdResponseDTO1.class);
-
 			if (response.getResponse() != null) {
 				String jsonString = objMapper.writeValueAsString(response.getResponse().getIdentity());//gsonObj.toJson(response.getResponse());
 				JSONObject identityJson = JsonUtil.objectMapperReadValue(jsonString, JSONObject.class);
