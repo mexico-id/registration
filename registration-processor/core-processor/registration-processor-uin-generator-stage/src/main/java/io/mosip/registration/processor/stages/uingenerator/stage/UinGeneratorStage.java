@@ -251,9 +251,10 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 				String uinField = fieldMap.get(utility.getMappingJsonValue(MappingJsonConstants.UIN, MappingJsonConstants.IDENTITY));
 				if ((RegistrationType.DEACTIVATED.toString())
 						.equalsIgnoreCase(object.getReg_type()) && (StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null"))) {
-					String handleId = fieldMap.get(utility.getMappingJsonValue("curpId", MappingJsonConstants.IDENTITY));
 					//get UIN using handleId & set UIN value into uinField
 					uinField = utility.getUINByHandle(registrationId, registrationStatusDto.getRegistrationType(), ProviderStageName.UIN_GENERATOR);
+					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+							registrationId, "UIN retrieved using handle" + uinField);
 				}
 
 				JSONObject demographicIdentity = new JSONObject();
@@ -323,6 +324,8 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 								demographicIdentity, description);
 					} else if ((RegistrationType.DEACTIVATED.toString())
 							.equalsIgnoreCase(object.getReg_type())) {
+						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+								registrationId, "Enters into deactivate flow...");
 						idResponseDTO = deactivateUin(registrationId, uinField, object, demographicIdentity,
 								description);
 					} else if (RegistrationType.UPDATE.toString().equalsIgnoreCase(object.getReg_type())
@@ -887,6 +890,8 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 			return idResponseDto;
 
 		} else {
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
+					LoggerFileConstant.REGISTRATIONID.toString() + id, "deactivateUin, Updated Response from IdRepo API", "existing UIN status: " + idResponseDto.getResponse().getStatus());
 			requestDto.setRegistrationId(id);
 			requestDto.setStatus(RegistrationType.DEACTIVATED.toString());
 			requestDto.setIdentity(demographicIdentity);
@@ -901,6 +906,9 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 
 			idResponseDto = idrepoDraftService.idrepoUpdateDraft(id, uin, idRequestDTO);
 
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
+					LoggerFileConstant.REGISTRATIONID.toString() + id, "deactivateUin, Updated Response from IdRepo API", "Idrepo draft update call staus: " + idResponseDto.getResponse().getStatus());
+
 			if (isIdResponseNotNull(idResponseDto)) {
 				if (idResponseDto.getResponse().getStatus().equalsIgnoreCase(RegistrationType.DEACTIVATED.toString())) {
 					description.setStatusCode(RegistrationStatusCode.PROCESSED.toString());
@@ -911,7 +919,9 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 					description.setCode(PlatformSuccessMessages.RPR_UIN_DEACTIVATION_SUCCESS.getCode());
 					description.setTransactionStatusCode(RegistrationTransactionStatusCode.PROCESSED.toString());
 					object.setIsValid(Boolean.TRUE);
-					statusComment = idResponseDto.getResponse().getStatus().toString();
+					statusComment = idResponseDto.getResponse().getStatus();
+					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
+							LoggerFileConstant.REGISTRATIONID.toString() + id, "deactivateUin, Updated Response from IdRepo API", "Deactivation flow is success in IDrepo: " + description.getStatusComment());
 
 				}
 			} else {
@@ -927,6 +937,9 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 				description.setCode(PlatformErrorMessages.UIN_DEACTIVATION_FAILED.getCode());
 				description.setTransactionStatusCode(RegistrationTransactionStatusCode.REPROCESS.toString());
 				object.setIsValid(Boolean.FALSE);
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
+						LoggerFileConstant.REGISTRATIONID.toString() + id, "deactivateUin, Updated Response from IdRepo API", "Deactivation failed: " + description.getStatusComment());
+
 			}
 
 		}
