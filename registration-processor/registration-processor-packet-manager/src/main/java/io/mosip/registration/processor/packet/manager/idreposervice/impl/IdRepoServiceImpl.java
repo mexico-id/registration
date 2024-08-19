@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.mosip.registration.processor.core.idrepo.dto.IdRequestDto;
 import org.json.simple.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
@@ -193,5 +194,26 @@ public class IdRepoServiceImpl implements IdRepoService {
 				machedRegId, "IdRepoServiceImpl::getIdResponseFromIDRepo()::exit");
 
 		return responseDTO;
+	}
+
+	@Override
+	public ResponseDTO updateIdentity(IdRequestDto idRequestDto)
+			throws IOException, ApisResourceAccessException {
+		ResponseDTO responseDTO=null;
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), idRequestDto.getRequest().getRegistrationId(),
+				"IdRepoServiceImpl::updateIdentity()::entry");
+
+		ResponseWrapper response = (ResponseWrapper) restClientService.patchApi(ApiName.IDREPOSITORY,
+				null, "", "", idRequestDto, ResponseWrapper.class);
+
+		if (response.getResponse() != null) {
+			responseDTO=mapper.readValue(mapper.writeValueAsString(response.getResponse()), ResponseDTO.class);
+
+		}
+		regProcLogger.info("ManualAdjudication::updateIdentity(): {}", responseDTO);
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), idRequestDto.getRequest().getRegistrationId(),
+				"IdRepoServiceImpl::updateIdentity()::exit");
+		return responseDTO;
+
 	}
 }

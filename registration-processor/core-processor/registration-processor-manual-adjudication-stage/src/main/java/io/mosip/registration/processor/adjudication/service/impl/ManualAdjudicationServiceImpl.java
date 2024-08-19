@@ -4,16 +4,14 @@ import static io.mosip.registration.processor.adjudication.constants.ManualAdjud
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.UUID;
 import java.util.stream.Collectors;
+
+import io.mosip.registration.processor.core.idrepo.dto.IdRequestDto;
+import io.mosip.registration.processor.core.idrepo.dto.RequestDto;
+import io.mosip.registration.processor.core.packet.dto.abis.AbisResponseDetDto;
+import io.mosip.registration.processor.core.packet.dto.abis.AbisResponseDto;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -129,6 +127,8 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 	private static final String ID_REPO = "idrepo";
 	private static final String PACKET = "packet";
 	private static final String PROCESSED = "PROCESSED";
+	/** The Constant IDENTIFY. */
+	public static final String IDENTIFY = "IDENTIFY";
 	@Autowired
 	private Environment env;
 
@@ -157,6 +157,10 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 
 	@Value("${mosip.regproc.manual.adjudication.use.lts.format:true}")
 	private boolean  uselatestManualAdjudicationRequestFormat;
+
+	/** The id repo update. */
+	@Value("${registration.processor.id.repo.update}")
+	private String idRepoUpdate;
 
 	@Autowired
 	private RegistrationProcessorRestClientService registrationProcessorRestClientService;
@@ -916,7 +920,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 	private boolean successFlow(ManualVerificationEntity entity, ManualAdjudicationResponseDTO manualVerificationDTO,
 								List<ManualVerificationEntity> entities,
 								InternalRegistrationStatusDto registrationStatusDto, MessageDTO messageDTO,
-								LogDescription description) throws com.fasterxml.jackson.core.JsonProcessingException {
+								LogDescription description) throws IOException, PacketManagerException, ApisResourceAccessException, JsonProcessingException {
 
 		boolean isTransactionSuccessful = false;
 		String statusCode = manualVerificationDTO.getReturnValue() == 1 &&
@@ -959,6 +963,15 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 			description.setCode(PlatformSuccessMessages.RPR_MANUAL_VERIFICATION_APPROVED.getCode());
 
 		} else if (statusCode != null && statusCode.equalsIgnoreCase(ManualVerificationStatus.REJECTED.name())) {
+//			Manual adjudication stage - customization (if rejected)
+//			- if system finds multiple parent record(UIN) - then we have to reject
+//			- update the curp_bio_data status to 'DUPLICATE'
+//					- insert into matched_curp table
+//					- call update_identity - waiting for engg. release
+//					- create new handle for CURPID
+			//packetInfoManager.getBioRefIdByRegId()
+
+			checkAndUpdateHandle(entity, registrationStatusDto, manualVerificationDTO);
 			registrationStatusDto.setStatusCode(RegistrationStatusCode.REJECTED.toString());
 			registrationStatusDto.setStatusComment(StatusUtil.MANUAL_VERIFIER_REJECTED_PACKET.getMessage());
 			registrationStatusDto.setSubStatusCode(StatusUtil.MANUAL_VERIFIER_REJECTED_PACKET.getCode());
@@ -985,6 +998,66 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		}
 
 		return isTransactionSuccessful;
+	}
+
+	private void checkAndUpdateHandle(ManualVerificationEntity entity,
+									  InternalRegistrationStatusDto registrationStatusDto, ManualAdjudicationResponseDTO manualVerificationDTO) throws IOException, ApisResourceAccessException, PacketManagerException, JsonProcessingException {
+		List<Candidate> candidateList = manualVerificationDTO.getCandidateList().getCandidates();
+		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), candidatelist: {}", mapper.writeValueAsString(candidateList));
+		Set<String> uins = new HashSet<>();
+		Set<String> matchedCurpIds = new HashSet<>();
+		List<String> matchedRefIds = new ArrayList<>();
+		List<AbisResponseDetDto> abisResponseDetDtoList = new ArrayList<>();
+		List<AbisResponseDto> abisResponseDtoList = packetInfoManager.getAbisResponseRecords(registrationStatusDto.getLatestRegistrationTransactionId(), IDENTIFY);
+
+		for (AbisResponseDto abisResponseDto : abisResponseDtoList) {
+			abisResponseDetDtoList.addAll(packetInfoManager.getAbisResponseDetails(abisResponseDto.getId()));
+		}
+		if (!abisResponseDetDtoList.isEmpty()) {
+			for (AbisResponseDetDto abisResponseDetDto : abisResponseDetDtoList) {
+				matchedRefIds.add(abisResponseDetDto.getMatchedBioRefId());
+			}
+			if (!CollectionUtils.isEmpty(matchedRefIds)) {
+				List<String> matchedRegIds = packetInfoManager.getAbisRefRegIdsByMatchedRefIds(matchedRefIds);
+				if (!CollectionUtils.isEmpty(matchedRegIds)) {
+					for (String matchedRegId: matchedRegIds) {
+						matchedCurpIds.add(packetManagerService.getFieldByMappingJsonKey(matchedRegId, MappingJsonConstants.CURPID,
+								registrationStatusDto.getRegistrationType(), ProviderStageName.MANUAL_ADJUDICATION));
+						uins.add(idRepoService.getUinByRid(matchedRegId, utility.getGetRegProcessorDemographicIdentity()));
+					}
+				}
+			}
+		}
+
+		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), uins: {}", uins.toString());
+		if (!uins.isEmpty() && uins.size() == 1) {
+
+			Map<String, Object> identity = new HashMap<>();
+			identity.put(MappingJsonConstants.UIN, uins.stream().findFirst().get());
+			identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().collect(Collectors.toList()));//read curpid from packet
+			identity.put("selectedHandles", Arrays.asList(MappingJsonConstants.CURPID));
+			IdRequestDto idRequestDto = prepareIdRepoRequest(entity.getRegId(), identity);
+			ResponseDTO responseDTO = idRepoService.updateIdentity(idRequestDto);
+			regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), Update Identity Response: {}", mapper.writeValueAsString(responseDTO));
+		}
+//		- update the curp_bio_data with status 'DUPLICATE'
+//		- insert into matched_curp table
+	}
+
+	private IdRequestDto prepareIdRepoRequest (String regId, Map<String, Object> identity) throws com.fasterxml.jackson.core.JsonProcessingException {
+		IdRequestDto idRequestDTO = new IdRequestDto();
+// Setting the identity JSON object to the requestDto
+		RequestDto requestDto = new RequestDto();
+		requestDto.setRegistrationId(regId);
+		requestDto.setIdentity(identity);
+
+		// Setting the requestDto to the idRequestDto
+		idRequestDTO.setId(idRepoUpdate);
+		idRequestDTO.setVersion(ManualAdjudicationConstants.idRepoApiVersion);
+		idRequestDTO.setRequesttime(DateUtils.getUTCCurrentDateTimeString());
+		idRequestDTO.setRequest(requestDto);
+		regProcLogger.info("ManualAdjudication::prepareIdRepoRequest(): {}", mapper.writeValueAsString(idRequestDTO));
+		return idRequestDTO;
 	}
 
 	private void updateErrorFlags(InternalRegistrationStatusDto registrationStatusDto, MessageDTO object) {

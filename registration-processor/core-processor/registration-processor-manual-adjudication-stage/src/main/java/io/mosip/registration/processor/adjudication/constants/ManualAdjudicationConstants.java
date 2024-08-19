@@ -35,4 +35,6 @@ public class ManualAdjudicationConstants {
 	public static final String POLICY_ID = "policyId";
 	public static final String POLICIES = "policies";
 	public static final String SHAREABLE_ATTRIBUTES = "shareableAttributes";
+	/** The id repo api version. */
+	public static final String idRepoApiVersion = "v1";
 }

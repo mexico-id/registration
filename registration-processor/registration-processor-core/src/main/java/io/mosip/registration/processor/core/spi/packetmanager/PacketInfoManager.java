@@ -358,5 +358,6 @@ public interface PacketInfoManager<T, /** D, M, */
 	
 	public void saveRegLostUinDet(String regId, String workflowInstanceId, String latestRegId, String moduleId, String moduleName);
 
+	public List<String> getAbisRefRegIdsByMatchedRefIds(List<String> matchRefIds);
 
 }

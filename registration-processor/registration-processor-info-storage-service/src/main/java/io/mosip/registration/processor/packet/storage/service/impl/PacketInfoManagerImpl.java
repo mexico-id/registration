@@ -1011,5 +1011,9 @@ public class PacketInfoManagerImpl implements PacketInfoManager<Identity, Applic
 		return PacketInfoMapper.convertRegBioRefEntityListToDto(regBioRefList);
 	}
 
+	@Override
+	public List<String> getAbisRefRegIdsByMatchedRefIds(List<String> matchRefIds) {
+		return packetInfoDao.getAbisRefRegIdsByMatchedRefIds(matchRefIds);
+	}
 
 }
