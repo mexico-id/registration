@@ -971,7 +971,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 //					- create new handle for CURPID
 			//packetInfoManager.getBioRefIdByRegId()
 
-			checkAndUpdateHandle(entity, registrationStatusDto, manualVerificationDTO);
+			checkAndUpdateIdentity(entity, registrationStatusDto, manualVerificationDTO);
 			registrationStatusDto.setStatusCode(RegistrationStatusCode.REJECTED.toString());
 			registrationStatusDto.setStatusComment(StatusUtil.MANUAL_VERIFIER_REJECTED_PACKET.getMessage());
 			registrationStatusDto.setSubStatusCode(StatusUtil.MANUAL_VERIFIER_REJECTED_PACKET.getCode());
@@ -1000,48 +1000,41 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		return isTransactionSuccessful;
 	}
 
-	private void checkAndUpdateHandle(ManualVerificationEntity entity,
+	private void checkAndUpdateIdentity(ManualVerificationEntity entity,
 									  InternalRegistrationStatusDto registrationStatusDto, ManualAdjudicationResponseDTO manualVerificationDTO) throws IOException, ApisResourceAccessException, PacketManagerException, JsonProcessingException {
 		List<Candidate> candidateList = manualVerificationDTO.getCandidateList().getCandidates();
 		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), candidatelist: {}", mapper.writeValueAsString(candidateList));
 		Set<String> uins = new HashSet<>();
 		Set<String> matchedCurpIds = new HashSet<>();
 		List<String> matchedRefIds = new ArrayList<>();
-		List<AbisResponseDetDto> abisResponseDetDtoList = new ArrayList<>();
-		List<AbisResponseDto> abisResponseDtoList = packetInfoManager.getAbisResponseRecords(registrationStatusDto.getLatestRegistrationTransactionId(), IDENTIFY);
 
-		for (AbisResponseDto abisResponseDto : abisResponseDtoList) {
-			abisResponseDetDtoList.addAll(packetInfoManager.getAbisResponseDetails(abisResponseDto.getId()));
-		}
-		if (!abisResponseDetDtoList.isEmpty()) {
-			for (AbisResponseDetDto abisResponseDetDto : abisResponseDetDtoList) {
-				matchedRefIds.add(abisResponseDetDto.getMatchedBioRefId());
-			}
-			if (!CollectionUtils.isEmpty(matchedRefIds)) {
-				List<String> matchedRegIds = packetInfoManager.getAbisRefRegIdsByMatchedRefIds(matchedRefIds);
-				if (!CollectionUtils.isEmpty(matchedRegIds)) {
-					for (String matchedRegId: matchedRegIds) {
-						matchedCurpIds.add(packetManagerService.getFieldByMappingJsonKey(matchedRegId, MappingJsonConstants.CURPID,
-								registrationStatusDto.getRegistrationType(), ProviderStageName.MANUAL_ADJUDICATION));
-						uins.add(idRepoService.getUinByRid(matchedRegId, utility.getGetRegProcessorDemographicIdentity()));
-					}
-				}
-			}
+		for (Candidate candidate : candidateList) {
+			uins.add(idRepoService.getUinByRid(candidate.getReferenceId(), utility.getGetRegProcessorDemographicIdentity()));
 		}
 
 		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), uins: {}", uins.toString());
 		if (!uins.isEmpty() && uins.size() == 1) {
+			matchedCurpIds.addAll(fetchHandlesToUpdate(entity, uins, registrationStatusDto.getRegistrationType()));
 
 			Map<String, Object> identity = new HashMap<>();
 			identity.put(MappingJsonConstants.UIN, uins.stream().findFirst().get());
 			identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().collect(Collectors.toList()));//read curpid from packet
 			identity.put("selectedHandles", Arrays.asList(MappingJsonConstants.CURPID));
 			IdRequestDto idRequestDto = prepareIdRepoRequest(entity.getRegId(), identity);
+			regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
 			ResponseDTO responseDTO = idRepoService.updateIdentity(idRequestDto);
 			regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), Update Identity Response: {}", mapper.writeValueAsString(responseDTO));
 		}
 //		- update the curp_bio_data with status 'DUPLICATE'
 //		- insert into matched_curp table
+	}
+
+	private List<String> fetchHandlesToUpdate(ManualVerificationEntity entity, Set<String> uins, String regType) throws PacketManagerException, ApisResourceAccessException, IOException, JsonProcessingException {
+		String handleId = packetManagerService.getFieldByMappingJsonKey(entity.getRegId(), MappingJsonConstants.CURPID,
+				regType, ProviderStageName.MANUAL_ADJUDICATION);
+		ResponseDTO responseDTO = idRepoService.getIdResponseFromIDRepo(uins.stream().findFirst().get());
+		JSONObject identityJSON = mapper.readValue(mapper.writeValueAsString(responseDTO.getIdentity()), JSONObject.class);
+		return (List<String>) identityJSON.get(MappingJsonConstants.CURPID);
 	}
 
 	private IdRequestDto prepareIdRepoRequest (String regId, Map<String, Object> identity) throws com.fasterxml.jackson.core.JsonProcessingException {
