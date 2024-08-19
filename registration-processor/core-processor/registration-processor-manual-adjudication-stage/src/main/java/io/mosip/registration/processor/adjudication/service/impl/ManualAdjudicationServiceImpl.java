@@ -1009,12 +1009,15 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		List<String> matchedRefIds = new ArrayList<>();
 
 		for (Candidate candidate : candidateList) {
-			uins.add(idRepoService.getUinByRid(candidate.getReferenceId(), utility.getGetRegProcessorDemographicIdentity()));
+			String uin = idRepoService.getUinByRid(candidate.getReferenceId(), utility.getGetRegProcessorDemographicIdentity());
+			if (org.springframework.util.StringUtils.hasText(uin)) {
+				uins.add(uin);
+			}
 		}
 
 		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), uins: {}", uins.toString());
 		if (!uins.isEmpty() && uins.size() == 1) {
-			matchedCurpIds.addAll(fetchHandlesToUpdate(entity, uins, registrationStatusDto.getRegistrationType()));
+			matchedCurpIds.addAll(fetchHandlesToUpdate(entity, uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType()));
 
 			Map<String, Object> identity = new HashMap<>();
 			identity.put(MappingJsonConstants.UIN, uins.stream().findFirst().get());
@@ -1029,12 +1032,19 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 //		- insert into matched_curp table
 	}
 
-	private List<String> fetchHandlesToUpdate(ManualVerificationEntity entity, Set<String> uins, String regType) throws PacketManagerException, ApisResourceAccessException, IOException, JsonProcessingException {
+	private List<String> fetchHandlesToUpdate(ManualVerificationEntity entity, String uin, String regType) throws PacketManagerException, ApisResourceAccessException, IOException, JsonProcessingException {
+		List<String> existingHandles = new ArrayList<>();
 		String handleId = packetManagerService.getFieldByMappingJsonKey(entity.getRegId(), MappingJsonConstants.CURPID,
 				regType, ProviderStageName.MANUAL_ADJUDICATION);
-		ResponseDTO responseDTO = idRepoService.getIdResponseFromIDRepo(uins.stream().findFirst().get());
+		existingHandles.add(handleId);
+		ResponseDTO responseDTO = idRepoService.getIdResponseFromIDRepo(uin);
 		JSONObject identityJSON = mapper.readValue(mapper.writeValueAsString(responseDTO.getIdentity()), JSONObject.class);
-		return (List<String>) identityJSON.get(MappingJsonConstants.CURPID);
+		if (identityJSON.get(MappingJsonConstants.CURPID) instanceof String) {
+			existingHandles.addAll(Arrays.asList(((String) identityJSON.get(MappingJsonConstants.CURPID)).split(",")));
+		} else {
+			existingHandles.addAll((List<String>) identityJSON.get(MappingJsonConstants.CURPID));
+		}
+		return existingHandles;
 	}
 
 	private IdRequestDto prepareIdRepoRequest (String regId, Map<String, Object> identity) throws com.fasterxml.jackson.core.JsonProcessingException {
