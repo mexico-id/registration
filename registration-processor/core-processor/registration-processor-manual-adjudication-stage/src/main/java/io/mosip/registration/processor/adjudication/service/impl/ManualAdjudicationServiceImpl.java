@@ -1018,12 +1018,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), uins: {}", uins.toString());
 		if (!uins.isEmpty() && uins.size() == 1) {
 			matchedCurpIds.addAll(fetchHandlesToUpdate(entity, uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType()));
-
-			Map<String, Object> identity = new HashMap<>();
-			identity.put(MappingJsonConstants.UIN, uins.stream().findFirst().get());
-			identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().collect(Collectors.toList()));//read curpid from packet
-			identity.put("selectedHandles", Arrays.asList(MappingJsonConstants.CURPID));
-			IdRequestDto idRequestDto = prepareIdRepoRequest(entity.getRegId(), identity);
+			IdRequestDto idRequestDto = prepareIdRepoRequest(entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType(), matchedCurpIds);
 			regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
 			ResponseDTO responseDTO = idRepoService.updateIdentity(idRequestDto);
 			regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), Update Identity Response: {}", mapper.writeValueAsString(responseDTO));
@@ -1047,11 +1042,19 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		return existingHandles;
 	}
 
-	private IdRequestDto prepareIdRepoRequest (String regId, Map<String, Object> identity) throws com.fasterxml.jackson.core.JsonProcessingException {
+	private IdRequestDto prepareIdRepoRequest (String regId, String uin, String regType, Set<String> matchedCurpIds) throws IOException, PacketManagerException, ApisResourceAccessException, JsonProcessingException {
 		IdRequestDto idRequestDTO = new IdRequestDto();
 // Setting the identity JSON object to the requestDto
 		RequestDto requestDto = new RequestDto();
 		requestDto.setRegistrationId(regId);
+		String schemaVersion = packetManagerService.getFieldByMappingJsonKey(regId, MappingJsonConstants.IDSCHEMA_VERSION,
+				regType, ProviderStageName.MANUAL_ADJUDICATION);
+		Map<String, Object> identity = new HashMap<>();
+		identity.put(MappingJsonConstants.IDSCHEMA_VERSION, Double.valueOf(schemaVersion));
+		identity.put(MappingJsonConstants.UIN.toUpperCase(Locale.ROOT), uin);
+		identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().collect(Collectors.toList()));//read curpid from packet
+		identity.put("selectedHandles", Arrays.asList(MappingJsonConstants.CURPID));
+
 		requestDto.setIdentity(identity);
 
 		// Setting the requestDto to the idRequestDto
