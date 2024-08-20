@@ -1,11 +1,7 @@
 package io.mosip.registration.processor.stages.uingenerator.stage;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.json.JSONArray;
@@ -494,6 +490,9 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 							jsonList.add(hashMap);
 						}
 						demographicIdentity.putIfAbsent(e.getKey(), jsonList);
+					} else if ((e.getKey().equals(MappingJsonConstants.SELECTED_HANDLES)
+							|| e.getKey().equals(MappingJsonConstants.CURPID)) && json instanceof String) {
+						demographicIdentity.put(e.getKey(), Arrays.asList(value.split(",")));
 					} else
 						demographicIdentity.putIfAbsent(e.getKey(), value);
 				} else

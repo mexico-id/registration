@@ -1051,7 +1051,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		identity.put(MappingJsonConstants.IDSCHEMA_VERSION, Double.valueOf(schemaVersion));
 		identity.put(MappingJsonConstants.UIN.toUpperCase(Locale.ROOT), uin);
 		identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().distinct().collect(Collectors.toList()));
-		identity.put("selectedHandles", Arrays.asList(MappingJsonConstants.CURPID));
+		identity.put(MappingJsonConstants.SELECTED_HANDLES, Arrays.asList(MappingJsonConstants.CURPID));
 
 		requestDto.setIdentity(identity);
 

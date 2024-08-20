@@ -41,6 +41,6 @@ public class MappingJsonConstants {
 	public static final String UIN = "uin";
 	public static final String LOCATION_HIERARCHY_FOR_PROFILING = "locationHierarchyForProfiling";
 
-
+	public static final String SELECTED_HANDLES = "selectedHandles";
     public static final String CURPID = "curpId";
 }
