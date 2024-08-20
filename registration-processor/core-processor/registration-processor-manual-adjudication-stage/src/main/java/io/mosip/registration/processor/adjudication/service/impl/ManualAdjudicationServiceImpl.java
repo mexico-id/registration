@@ -1003,10 +1003,8 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 	private void checkAndUpdateIdentity(ManualVerificationEntity entity,
 									  InternalRegistrationStatusDto registrationStatusDto, ManualAdjudicationResponseDTO manualVerificationDTO) throws IOException, ApisResourceAccessException, PacketManagerException, JsonProcessingException {
 		List<Candidate> candidateList = manualVerificationDTO.getCandidateList().getCandidates();
-		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), candidatelist: {}", mapper.writeValueAsString(candidateList));
+		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity entry..");
 		Set<String> uins = new HashSet<>();
-		Set<String> matchedCurpIds = new HashSet<>();
-		List<String> matchedRefIds = new ArrayList<>();
 
 		for (Candidate candidate : candidateList) {
 			String uin = idRepoService.getUinByRid(candidate.getReferenceId(), utility.getGetRegProcessorDemographicIdentity());
@@ -1015,21 +1013,21 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 			}
 		}
 
-		regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), uins: {}", uins.toString());
+		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, uins: {}", uins.toString());
 		if (!uins.isEmpty() && uins.size() == 1) {
-			matchedCurpIds.addAll(fetchHandlesToUpdate(entity, uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType()));
-			IdRequestDto idRequestDto = prepareIdRepoRequest(entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType(), matchedCurpIds);
-			regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
+			IdRequestDto idRequestDto = prepareIdRepoRequest(entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType());
+			regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
 			ResponseDTO responseDTO = idRepoService.updateIdentity(idRequestDto);
-			regProcLogger.info("ManualAdjudication::checkAndUpdateHandle(), Update Identity Response: {}", mapper.writeValueAsString(responseDTO));
+			regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, Update Identity Response: {}", mapper.writeValueAsString(responseDTO));
 		}
 //		- update the curp_bio_data with status 'DUPLICATE'
 //		- insert into matched_curp table
+		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity exit.");
 	}
 
-	private List<String> fetchHandlesToUpdate(ManualVerificationEntity entity, String uin, String regType) throws PacketManagerException, ApisResourceAccessException, IOException, JsonProcessingException {
+	private List<String> fetchHandlesToUpdate(String regId, String uin, String regType) throws PacketManagerException, ApisResourceAccessException, IOException, JsonProcessingException {
 		List<String> existingHandles = new ArrayList<>();
-		String handleId = packetManagerService.getFieldByMappingJsonKey(entity.getRegId(), MappingJsonConstants.CURPID,
+		String handleId = packetManagerService.getFieldByMappingJsonKey(regId, MappingJsonConstants.CURPID,
 				regType, ProviderStageName.MANUAL_ADJUDICATION);
 		existingHandles.add(handleId);
 		ResponseDTO responseDTO = idRepoService.getIdResponseFromIDRepo(uin);
@@ -1042,9 +1040,9 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		return existingHandles;
 	}
 
-	private IdRequestDto prepareIdRepoRequest (String regId, String uin, String regType, Set<String> matchedCurpIds) throws IOException, PacketManagerException, ApisResourceAccessException, JsonProcessingException {
+	private IdRequestDto prepareIdRepoRequest (String regId, String uin, String regType) throws IOException, PacketManagerException, ApisResourceAccessException, JsonProcessingException {
+		List<String> matchedCurpIds = fetchHandlesToUpdate(regId, uin, regType);
 		IdRequestDto idRequestDTO = new IdRequestDto();
-// Setting the identity JSON object to the requestDto
 		RequestDto requestDto = new RequestDto();
 		requestDto.setRegistrationId(regId);
 		String schemaVersion = packetManagerService.getFieldByMappingJsonKey(regId, MappingJsonConstants.IDSCHEMA_VERSION,
@@ -1052,7 +1050,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		Map<String, Object> identity = new HashMap<>();
 		identity.put(MappingJsonConstants.IDSCHEMA_VERSION, Double.valueOf(schemaVersion));
 		identity.put(MappingJsonConstants.UIN.toUpperCase(Locale.ROOT), uin);
-		identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().collect(Collectors.toList()));//read curpid from packet
+		identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().distinct().collect(Collectors.toList()));
 		identity.put("selectedHandles", Arrays.asList(MappingJsonConstants.CURPID));
 
 		requestDto.setIdentity(identity);
