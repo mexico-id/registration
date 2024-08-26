@@ -909,7 +909,7 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 					LoggerFileConstant.REGISTRATIONID.toString() + id, "deactivateUin, Updated Response from IdRepo API", "Idrepo draft update call staus: " + idResponseDto.getResponse().getStatus());
 
 			if (isIdResponseNotNull(idResponseDto)) {
-				if (idResponseDto.getResponse().getStatus().equalsIgnoreCase(RegistrationType.DEACTIVATED.toString())) {
+				if (idResponseDto.getResponse().getStatus().equalsIgnoreCase(IDREPO_STATUS)) {
 					description.setStatusCode(RegistrationStatusCode.PROCESSED.toString());
 					description.setStatusComment(StatusUtil.UIN_DEACTIVATION_SUCCESS.getMessage());
 					description.setSubStatusCode(StatusUtil.UIN_DEACTIVATION_SUCCESS.getCode());
