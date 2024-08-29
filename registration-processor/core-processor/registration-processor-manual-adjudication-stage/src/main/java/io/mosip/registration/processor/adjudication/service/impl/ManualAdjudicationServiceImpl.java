@@ -8,6 +8,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
+import io.mosip.registration.processor.core.curpbiomanager.CurpBioDtorequest;
 import io.mosip.registration.processor.core.idrepo.dto.IdRequestDto;
 import io.mosip.registration.processor.core.idrepo.dto.RequestDto;
 import io.mosip.registration.processor.core.packet.dto.abis.AbisResponseDetDto;
@@ -1012,24 +1013,40 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 				uins.add(uin);
 			}
 		}
-
+		String handleId ="";
+		List<String> matchedCurpIds = new ArrayList<>();
 		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, uins: {}", uins.toString());
 		if (!uins.isEmpty() && uins.size() == 1) {
-			IdRequestDto idRequestDto = prepareIdRepoRequest(entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType());
+			handleId = packetManagerService.getFieldByMappingJsonKey(entity.getRegId(), MappingJsonConstants.CURPID,
+					registrationStatusDto.getRegistrationType(), ProviderStageName.MANUAL_ADJUDICATION);
+			matchedCurpIds = fetchHandlesToUpdate(entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType());
+			IdRequestDto idRequestDto = prepareIdRepoRequest(matchedCurpIds,entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType());
 			regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
 			ResponseDTO responseDTO = idRepoService.updateIdentity(idRequestDto);
 			regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, Update Identity Response: {}", mapper.writeValueAsString(responseDTO));
 		}
 //		- update the curp_bio_data with status 'DUPLICATE'
 //		- insert into matched_curp table
+		CurpBioDtorequest curpBioDtorequest = new CurpBioDtorequest();
+		curpBioDtorequest.setCurpId(handleId);
+		curpBioDtorequest.setMatchedCurpIds(matchedCurpIds);
+		curpBioDtorequest.setStatusCode("ACTIVATE");
+		curpBioDtorequest.setStatusComment("Curp Id Activated");
+		curpBioDtorequest.setCurpStatus("DUPLICATE");
+		try {
+			regProcLogger.debug("Sending POST request to API: " + ApiName.CRUPMANAGERAPI + " with request body: " + curpBioDtorequest);
+			String response = (String) registrationProcessorRestClientService.postApi(ApiName.CRUPMANAGERAPI, new ArrayList<>(), null, null, curpBioDtorequest, String.class);
+			regProcLogger.debug("Received response from API: " + response);
+		} catch (ApisResourceAccessException e) {
+			regProcLogger.error("ApisResourceAccessException occurred while updating CurpBio for request: " + curpBioDtorequest, e);
+			throw e;
+		}
+
 		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity exit.");
 	}
 
 	private List<String> fetchHandlesToUpdate(String regId, String uin, String regType) throws PacketManagerException, ApisResourceAccessException, IOException, JsonProcessingException {
 		List<String> existingHandles = new ArrayList<>();
-		String handleId = packetManagerService.getFieldByMappingJsonKey(regId, MappingJsonConstants.CURPID,
-				regType, ProviderStageName.MANUAL_ADJUDICATION);
-		existingHandles.add(handleId);
 		ResponseDTO responseDTO = idRepoService.getIdResponseFromIDRepo(uin);
 		JSONObject identityJSON = mapper.readValue(mapper.writeValueAsString(responseDTO.getIdentity()), JSONObject.class);
 		if (identityJSON.get(MappingJsonConstants.CURPID) instanceof String) {
@@ -1040,8 +1057,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		return existingHandles;
 	}
 
-	private IdRequestDto prepareIdRepoRequest (String regId, String uin, String regType) throws IOException, PacketManagerException, ApisResourceAccessException, JsonProcessingException {
-		List<String> matchedCurpIds = fetchHandlesToUpdate(regId, uin, regType);
+	private IdRequestDto prepareIdRepoRequest (List<String> matchedCurpIds, String regId, String uin, String regType) throws IOException, PacketManagerException, ApisResourceAccessException, JsonProcessingException {
 		IdRequestDto idRequestDTO = new IdRequestDto();
 		RequestDto requestDto = new RequestDto();
 		requestDto.setRegistrationId(regId);
