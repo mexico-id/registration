@@ -1,5 +1,12 @@
 package io.mosip.registration.processor.stages.finalization.stage;
 
+import io.mosip.registration.processor.core.code.*;
+import io.mosip.registration.processor.core.constant.*;
+import io.mosip.registration.processor.core.constant.EventId;
+import io.mosip.registration.processor.core.constant.EventName;
+import io.mosip.registration.processor.core.constant.EventType;
+import io.mosip.registration.processor.core.spi.restclient.RegistrationProcessorRestClientService;
+import io.mosip.registration.processor.packet.storage.utils.PriorityBasedPacketManagerService;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,14 +21,6 @@ import io.mosip.registration.processor.core.abstractverticle.MessageDTO;
 import io.mosip.registration.processor.core.abstractverticle.MosipEventBus;
 import io.mosip.registration.processor.core.abstractverticle.MosipRouter;
 import io.mosip.registration.processor.core.abstractverticle.MosipVerticleAPIManager;
-import io.mosip.registration.processor.core.code.ModuleName;
-import io.mosip.registration.processor.core.code.RegistrationExceptionTypeCode;
-import io.mosip.registration.processor.core.code.RegistrationTransactionStatusCode;
-import io.mosip.registration.processor.core.code.RegistrationTransactionTypeCode;
-import io.mosip.registration.processor.core.constant.EventId;
-import io.mosip.registration.processor.core.constant.EventName;
-import io.mosip.registration.processor.core.constant.EventType;
-import io.mosip.registration.processor.core.constant.LoggerFileConstant;
 import io.mosip.registration.processor.core.exception.ApisResourceAccessException;
 import io.mosip.registration.processor.core.exception.util.PlatformErrorMessages;
 import io.mosip.registration.processor.core.exception.util.PlatformSuccessMessages;
@@ -39,6 +38,9 @@ import io.mosip.registration.processor.status.code.RegistrationStatusCode;
 import io.mosip.registration.processor.status.dto.InternalRegistrationStatusDto;
 import io.mosip.registration.processor.status.dto.RegistrationStatusDto;
 import io.mosip.registration.processor.status.service.RegistrationStatusService;
+
+import java.io.IOException;
+import java.util.ArrayList;
 
 @RefreshScope
 @Service
@@ -83,7 +85,10 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 	/** Mosip router for APIs */
 	@Autowired
 	private MosipRouter router;
-	
+
+	@Autowired
+	private RegistrationProcessorRestClientService registrationProcessorRestClientService;
+
 	/** registration status mapper util */
 	@Autowired
 	private RegistrationExceptionMapperUtil registrationStatusMapperUtil;
@@ -94,6 +99,8 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 	/** The core audit request builder. */
 	@Autowired
 	private AuditLogRequestBuilder auditLogRequestBuilder;
+	@Autowired
+	private PriorityBasedPacketManagerService packetManagerService;
 	
 	@Override
 	protected String getPropertyPrefix() {
@@ -137,14 +144,16 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
 				registrationId, "FinalizationStage::process()::entry");
 		try {
-		 registrationStatusDto = registrationStatusService.getRegistrationStatus(
-				registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
-		registrationStatusDto
-			.setLatestTransactionTypeCode(RegistrationTransactionTypeCode.FINALIZATION.toString());
-		registrationStatusDto.setRegistrationStageName(getStageName());
-		
-		
-			if(!idrepoDraftService.idrepoHasDraft(registrationStatusDto.getRegistrationId())) {
+			registrationStatusDto = registrationStatusService.getRegistrationStatus(
+					registrationId, object.getReg_type(), object.getIteration(), object.getWorkflowInstanceId());
+			registrationStatusDto
+					.setLatestTransactionTypeCode(RegistrationTransactionTypeCode.FINALIZATION.toString());
+			registrationStatusDto.setRegistrationStageName(getStageName());
+
+			String handle = packetManagerService.getFieldByMappingJsonKey(registrationId, MappingJsonConstants.CURPID, registrationStatusDto.getRegistrationType(), ProviderStageName.FINALIZATION);
+			crupBioStatusUpdate(handle, registrationStatusDto.getRegistrationType());
+
+			if (!idrepoDraftService.idrepoHasDraft(registrationStatusDto.getRegistrationId())) {
 				registrationStatusDto.setStatusCode(RegistrationStatusCode.FAILED.toString());
 				registrationStatusDto.setLatestTransactionStatusCode(registrationStatusMapperUtil
 						.getStatusCode(RegistrationExceptionTypeCode.DRAFT_REQUEST_UNAVAILABLE));
@@ -164,19 +173,19 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 				object.setIsValid(Boolean.FALSE);
 			}
 			else {
-				IdResponseDTO idResponseDTO=idrepoDraftService.idrepoPublishDraft(registrationStatusDto.getRegistrationId());
+				IdResponseDTO idResponseDTO = idrepoDraftService.idrepoPublishDraft(registrationStatusDto.getRegistrationId());
 				if(idResponseDTO != null && idResponseDTO.getResponse() != null) {
-						registrationStatusDto.setStatusComment(StatusUtil.FINALIZATION_SUCCESS.getMessage());
-						registrationStatusDto.setSubStatusCode(StatusUtil.FINALIZATION_SUCCESS.getCode());
-						isTransactionSuccessful = true;
-						object.setIsValid(Boolean.TRUE);
-						registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.toString());
-						description.setMessage(PlatformSuccessMessages.RPR_FINALIZATION_SUCCESS.getMessage());
-						description.setCode(PlatformSuccessMessages.RPR_FINALIZATION_SUCCESS.getCode());
-						description.setTransactionStatusCode(RegistrationTransactionStatusCode.SUCCESS.toString());
-					}
+					registrationStatusDto.setStatusComment(StatusUtil.FINALIZATION_SUCCESS.getMessage());
+					registrationStatusDto.setSubStatusCode(StatusUtil.FINALIZATION_SUCCESS.getCode());
+					isTransactionSuccessful = true;
+					object.setIsValid(Boolean.TRUE);
+					registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.toString());
+					description.setMessage(PlatformSuccessMessages.RPR_FINALIZATION_SUCCESS.getMessage());
+					description.setCode(PlatformSuccessMessages.RPR_FINALIZATION_SUCCESS.getCode());
+					description.setTransactionStatusCode(RegistrationTransactionStatusCode.SUCCESS.toString());
+
 				}
-			
+			}
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
 					registrationId, description.getMessage());
 			registrationStatusDto.setUpdatedBy(USER);
@@ -271,6 +280,20 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 		
 		return object;
 	}
+
+	public void crupBioStatusUpdate(String handle,String regType ) throws ApisResourceAccessException, IOException {
+		ArrayList<String> pathparams = new ArrayList<>();
+		pathparams.add(handle);
+		pathparams.add(regType);
+		try {
+		String response = (String) registrationProcessorRestClientService.getApi(ApiName.CRUPMANAGERGET, pathparams, "", "", String.class);
+		regProcLogger.debug("Received response from CRUPMANAGERGET: " + response);
+		} catch (ApisResourceAccessException e) {
+			regProcLogger.error("Error while accessing CRUPMANAGERGET API", e);
+			throw e;
+		}
+	}
+
 
 	/**
 	 * update Error Flags
