@@ -112,6 +112,11 @@ import io.mosip.registration.processor.status.service.RegistrationStatusService;
 @Transactional
 public class ManualAdjudicationServiceImpl implements ManualAdjudicationService {
 
+	private static final String CURP_ID_ACTIVATED = "CurpId Activated";
+	private static final String CURP_ID_NOT_ACTIVATED = "CurpId not activated, more than one UIN found.";
+	private static final String ACTIVATED = "ACTIVATED";
+	private static final String NOT_ACTIVATED = "NOT-ACTIVATED";
+	private static final String DUPLICATE = "DUPLICATE";
 	/** The logger. */
 	private static Logger regProcLogger = RegProcessorLogger.getLogger(ManualAdjudicationServiceImpl.class);
 	private LinkedHashMap<String, Object> policies = null;
@@ -1013,36 +1018,38 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 				uins.add(uin);
 			}
 		}
-		String handleId ="";
+		String handleId = packetManagerService.getFieldByMappingJsonKey(entity.getRegId(), MappingJsonConstants.CURPID,
+				registrationStatusDto.getRegistrationType(), ProviderStageName.MANUAL_ADJUDICATION);
+
 		List<String> matchedCurpIds = new ArrayList<>();
 		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, uins: {}", uins.toString());
 		if (!uins.isEmpty() && uins.size() == 1) {
-			handleId = packetManagerService.getFieldByMappingJsonKey(entity.getRegId(), MappingJsonConstants.CURPID,
-					registrationStatusDto.getRegistrationType(), ProviderStageName.MANUAL_ADJUDICATION);
 			matchedCurpIds = fetchHandlesToUpdate(entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType());
-			IdRequestDto idRequestDto = prepareIdRepoRequest(matchedCurpIds,entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType());
+			matchedCurpIds.add(handleId);
+			IdRequestDto idRequestDto = prepareIdRepoRequest(matchedCurpIds, entity.getRegId(), uins.stream().findFirst().get(), registrationStatusDto.getRegistrationType());
 			regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
 			ResponseDTO responseDTO = idRepoService.updateIdentity(idRequestDto);
 			regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, Update Identity Response: {}", mapper.writeValueAsString(responseDTO));
+			updateCurpManager(handleId, matchedCurpIds, ACTIVATED, CURP_ID_ACTIVATED, DUPLICATE);
+		} else {
+			updateCurpManager(handleId, matchedCurpIds, NOT_ACTIVATED, CURP_ID_NOT_ACTIVATED, DUPLICATE);
 		}
-//		- update the curp_bio_data with status 'DUPLICATE'
-//		- insert into matched_curp table
+		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity exit.");
+	}
+
+	private void updateCurpManager(String handleId, List<String> matchedCurpIds, String statusCode, String comment, String curpStatus) throws ApisResourceAccessException {
+
 		CurpBioDtorequest curpBioDtorequest = new CurpBioDtorequest();
 		curpBioDtorequest.setCurpId(handleId);
 		curpBioDtorequest.setMatchedCurpIds(matchedCurpIds);
-		curpBioDtorequest.setStatusCode("ACTIVATE");
-		curpBioDtorequest.setStatusComment("Curp Id Activated");
-		curpBioDtorequest.setCurpStatus("DUPLICATE");
-		try {
-			regProcLogger.debug("Sending POST request to API: " + ApiName.CRUPMANAGERAPI + " with request body: " + curpBioDtorequest);
-			String response = (String) registrationProcessorRestClientService.postApi(ApiName.CRUPMANAGERAPI, new ArrayList<>(), null, null, curpBioDtorequest, String.class);
-			regProcLogger.debug("Received response from API: " + response);
-		} catch (ApisResourceAccessException e) {
-			regProcLogger.error("ApisResourceAccessException occurred while updating CurpBio for request: " + curpBioDtorequest, e);
-			throw e;
-		}
+		curpBioDtorequest.setStatusCode(statusCode);
+		curpBioDtorequest.setStatusComment(comment);
 
-		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity exit.");
+		curpBioDtorequest.setCurpStatus(curpStatus);
+		regProcLogger.debug("Sending POST request to API: " + ApiName.CRUPMANAGERAPI + " with request body: " + curpBioDtorequest);
+		String response = (String) registrationProcessorRestClientService.postApi(ApiName.CRUPMANAGERAPI, new ArrayList<>(), null, null, curpBioDtorequest, String.class);
+		regProcLogger.info("Received response from curp manager service : " + response);
+
 	}
 
 	private List<String> fetchHandlesToUpdate(String regId, String uin, String regType) throws PacketManagerException, ApisResourceAccessException, IOException, JsonProcessingException {
@@ -1066,7 +1073,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		Map<String, Object> identity = new HashMap<>();
 		identity.put(MappingJsonConstants.IDSCHEMA_VERSION, Double.valueOf(schemaVersion));
 		identity.put(MappingJsonConstants.UIN.toUpperCase(Locale.ROOT), uin);
-		identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().distinct().collect(Collectors.toList()));
+		identity.put(MappingJsonConstants.CURPID, matchedCurpIds.stream().filter(curp -> org.springframework.util.StringUtils.hasText(curp)).distinct().collect(Collectors.toList()));
 		identity.put(MappingJsonConstants.SELECTED_HANDLES, Arrays.asList(MappingJsonConstants.CURPID));
 
 		requestDto.setIdentity(identity);

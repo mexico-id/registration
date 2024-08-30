@@ -43,4 +43,5 @@ public class MappingJsonConstants {
 
 	public static final String SELECTED_HANDLES = "selectedHandles";
     public static final String CURPID = "curpId";
+	public static final String STATUS = "status";
 }
