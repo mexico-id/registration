@@ -171,6 +171,8 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 			}
 			else {
 				String handle = packetManagerService.getFieldByMappingJsonKey(registrationId, MappingJsonConstants.CURPID, registrationStatusDto.getRegistrationType(), ProviderStageName.FINALIZATION);
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+						registrationId, "CurpId fetched by RID:{}", handle);
 				curpBioStatusUpdate(handle, registrationStatusDto.getRegistrationType());
 				IdResponseDTO idResponseDTO = idrepoDraftService.idrepoPublishDraft(registrationStatusDto.getRegistrationId());
 				if(idResponseDTO != null && idResponseDTO.getResponse() != null) {
@@ -286,7 +288,7 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 		pathparams.add(regType);
 		try {
 			String response = (String) registrationProcessorRestClientService.getApi(ApiName.CRUPMANAGERGET, pathparams, "", "", String.class);
-			regProcLogger.debug("Received response from CRUPMANAGERGET: " + response);
+			regProcLogger.info("Received response from CRUPMANAGERGET: " + response);
 		} catch (ApisResourceAccessException e) {
 			regProcLogger.error("Error while accessing CRUPMANAGERGET API", e);
 			throw e;
