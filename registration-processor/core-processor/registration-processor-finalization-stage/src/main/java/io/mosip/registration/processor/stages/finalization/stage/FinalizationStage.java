@@ -150,9 +150,6 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 					.setLatestTransactionTypeCode(RegistrationTransactionTypeCode.FINALIZATION.toString());
 			registrationStatusDto.setRegistrationStageName(getStageName());
 
-			String handle = packetManagerService.getFieldByMappingJsonKey(registrationId, MappingJsonConstants.CURPID, registrationStatusDto.getRegistrationType(), ProviderStageName.FINALIZATION);
-			crupBioStatusUpdate(handle, registrationStatusDto.getRegistrationType());
-
 			if (!idrepoDraftService.idrepoHasDraft(registrationStatusDto.getRegistrationId())) {
 				registrationStatusDto.setStatusCode(RegistrationStatusCode.FAILED.toString());
 				registrationStatusDto.setLatestTransactionStatusCode(registrationStatusMapperUtil
@@ -173,6 +170,8 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 				object.setIsValid(Boolean.FALSE);
 			}
 			else {
+				String handle = packetManagerService.getFieldByMappingJsonKey(registrationId, MappingJsonConstants.CURPID, registrationStatusDto.getRegistrationType(), ProviderStageName.FINALIZATION);
+				curpBioStatusUpdate(handle, registrationStatusDto.getRegistrationType());
 				IdResponseDTO idResponseDTO = idrepoDraftService.idrepoPublishDraft(registrationStatusDto.getRegistrationId());
 				if(idResponseDTO != null && idResponseDTO.getResponse() != null) {
 					registrationStatusDto.setStatusComment(StatusUtil.FINALIZATION_SUCCESS.getMessage());
@@ -281,13 +280,13 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 		return object;
 	}
 
-	public void crupBioStatusUpdate(String handle,String regType ) throws ApisResourceAccessException, IOException {
+	private void curpBioStatusUpdate(String handle,String regType ) throws ApisResourceAccessException, IOException {
 		ArrayList<String> pathparams = new ArrayList<>();
 		pathparams.add(handle);
 		pathparams.add(regType);
 		try {
-		String response = (String) registrationProcessorRestClientService.getApi(ApiName.CRUPMANAGERGET, pathparams, "", "", String.class);
-		regProcLogger.debug("Received response from CRUPMANAGERGET: " + response);
+			String response = (String) registrationProcessorRestClientService.getApi(ApiName.CRUPMANAGERGET, pathparams, "", "", String.class);
+			regProcLogger.debug("Received response from CRUPMANAGERGET: " + response);
 		} catch (ApisResourceAccessException e) {
 			regProcLogger.error("Error while accessing CRUPMANAGERGET API", e);
 			throw e;
