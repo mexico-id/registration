@@ -170,12 +170,12 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 				object.setIsValid(Boolean.FALSE);
 			}
 			else {
-				String handle = packetManagerService.getFieldByMappingJsonKey(registrationId, MappingJsonConstants.CURPID, registrationStatusDto.getRegistrationType(), ProviderStageName.FINALIZATION);
-				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
-						registrationId, "CurpId fetched by RID:{}", handle);
-				curpBioStatusUpdate(handle, registrationStatusDto.getRegistrationType());
 				IdResponseDTO idResponseDTO = idrepoDraftService.idrepoPublishDraft(registrationStatusDto.getRegistrationId());
 				if(idResponseDTO != null && idResponseDTO.getResponse() != null) {
+					String handle = packetManagerService.getFieldByMappingJsonKey(registrationId, MappingJsonConstants.CURPID, registrationStatusDto.getRegistrationType(), ProviderStageName.FINALIZATION);
+					regProcLogger.info("CurpId fetched by RID:{}", handle);
+					curpBioStatusUpdate(handle, registrationStatusDto.getRegistrationType());
+
 					registrationStatusDto.setStatusComment(StatusUtil.FINALIZATION_SUCCESS.getMessage());
 					registrationStatusDto.setSubStatusCode(StatusUtil.FINALIZATION_SUCCESS.getCode());
 					isTransactionSuccessful = true;
@@ -184,7 +184,6 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 					description.setMessage(PlatformSuccessMessages.RPR_FINALIZATION_SUCCESS.getMessage());
 					description.setCode(PlatformSuccessMessages.RPR_FINALIZATION_SUCCESS.getCode());
 					description.setTransactionStatusCode(RegistrationTransactionStatusCode.SUCCESS.toString());
-
 				}
 			}
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
