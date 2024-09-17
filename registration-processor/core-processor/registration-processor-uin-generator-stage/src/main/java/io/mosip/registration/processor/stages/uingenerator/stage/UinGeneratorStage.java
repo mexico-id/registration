@@ -490,9 +490,6 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 							jsonList.add(hashMap);
 						}
 						demographicIdentity.putIfAbsent(e.getKey(), jsonList);
-					} else if ((e.getKey().equals(MappingJsonConstants.SELECTED_HANDLES)
-							|| e.getKey().equals(MappingJsonConstants.CURPID)) && json instanceof String) {
-						demographicIdentity.put(e.getKey(), Arrays.asList(value.split(",")));
 					} else
 						demographicIdentity.putIfAbsent(e.getKey(), value);
 				} else
