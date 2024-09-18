@@ -117,7 +117,6 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 	private static final String ACTIVATED = "ACTIVATED";
 	private static final String NOT_ACTIVATED = "NOT-ACTIVATED";
 	private static final String DUPLICATE = "DUPLICATE";
-	private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 	/** The logger. */
 	private static Logger regProcLogger = RegProcessorLogger.getLogger(ManualAdjudicationServiceImpl.class);
 	private LinkedHashMap<String, Object> policies = null;
@@ -1079,8 +1078,8 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 
 	private boolean isNewCurpLatest(String newCurpCrDtimes, String exCurpDtimes) {
 		regProcLogger.info("newCurpCrDtimes: {}, exCurpDtimes: {}", newCurpCrDtimes, exCurpDtimes );
-		LocalDateTime newCurpCrDt = LocalDateTime.parse(newCurpCrDtimes.trim().replace(" ", "T"), FORMATTER);
-		LocalDateTime exCurpCrDt = LocalDateTime.parse(exCurpDtimes.trim().replace(" ", "T"), FORMATTER);
+		LocalDateTime newCurpCrDt = LocalDateTime.parse(newCurpCrDtimes.trim().replace(" ", "T"));
+		LocalDateTime exCurpCrDt = LocalDateTime.parse(exCurpDtimes.trim().replace(" ", "T"));
 		return DateUtils.after(newCurpCrDt, exCurpCrDt);
 	}
 
