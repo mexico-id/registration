@@ -135,6 +135,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 	private static final String PROCESSED = "PROCESSED";
 	/** The Constant IDENTIFY. */
 	public static final String IDENTIFY = "IDENTIFY";
+	private static final String individualBiometrics_demo = "{\"format\" : \"cbeff\",\"version\" : 1.0,\"value\" : \"individualBiometrics_bio_CBEFF\"}";
 	@Autowired
 	private Environment env;
 
@@ -1090,8 +1091,10 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		Map<String, Object> identity = new HashMap<>();
 		requestDto.setRegistrationId(regId);
 		if(isNewCurpLatest) {
+			String crDtimes = (String) identityMap.get(MappingJsonConstants.CURP_CR_DTIMES);
 			identity.put(MappingJsonConstants.PARENT_CURP_ID, identityMap.get(MappingJsonConstants.PARENT_CURP_ID));
-			identity.put(MappingJsonConstants.CURP_CR_DTIMES, identityMap.get(MappingJsonConstants.CURP_CR_DTIMES));
+			identity.put(MappingJsonConstants.CURP_CR_DTIMES, crDtimes.trim());
+			identity.put(MappingJsonConstants.INDIVIDUAL_BIOMETRICS, individualBiometrics_demo);
 			// get latest biometric to update.
 			Documents documents = getBiometrics(regId, MappingJsonConstants.INDIVIDUAL_BIOMETRICS, regType, MappingJsonConstants.INDIVIDUAL_BIOMETRICS);
 			requestDto.setDocuments(Arrays.asList(documents));
@@ -1111,7 +1114,6 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		idRequestDTO.setVersion(ManualAdjudicationConstants.idRepoApiVersion);
 		idRequestDTO.setRequesttime(DateUtils.getUTCCurrentDateTimeString());
 		idRequestDTO.setRequest(requestDto);
-		regProcLogger.info("ManualAdjudication::prepareIdRepoRequest(): {}", mapper.writeValueAsString(idRequestDTO));
 		return idRequestDTO;
 	}
 
