@@ -4,6 +4,8 @@ import static io.mosip.registration.processor.adjudication.constants.ManualAdjud
 
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -115,7 +117,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 	private static final String ACTIVATED = "ACTIVATED";
 	private static final String NOT_ACTIVATED = "NOT-ACTIVATED";
 	private static final String DUPLICATE = "DUPLICATE";
-	private static final String CURP_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
+	private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 	/** The logger. */
 	private static Logger regProcLogger = RegProcessorLogger.getLogger(ManualAdjudicationServiceImpl.class);
 	private LinkedHashMap<String, Object> policies = null;
@@ -1065,6 +1067,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		String exCurpDtimes = (String) identityJSON.get(MappingJsonConstants.CURP_CR_DTIMES);
 		String newCurpCrDtimes = currIdentityMap.get(MappingJsonConstants.CURP_CR_DTIMES);
 		boolean isNewCurpLatest = isNewCurpLatest(newCurpCrDtimes, exCurpDtimes);
+		regProcLogger.info("ManualAdjudication::fetchHandlesAndUpdateIdentity, isNewCurpLatest: {}", isNewCurpLatest);
 
 		IdRequestDto idRequestDto = prepareIdRepoRequest(handles, regId, uin, regType, isNewCurpLatest, currIdentityMap);
 		regProcLogger.info("ManualAdjudication::fetchHandlesAndUpdateIdentity, Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
@@ -1075,8 +1078,9 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 	}
 
 	private boolean isNewCurpLatest(String newCurpCrDtimes, String exCurpDtimes) {
-		Date newCurpCrDt = DateUtils.parseToDate(newCurpCrDtimes.trim(), CURP_DATE_FORMAT);
-		Date exCurpCrDt = DateUtils.parseToDate(exCurpDtimes.trim(), CURP_DATE_FORMAT);
+		regProcLogger.info("newCurpCrDtimes: {}, exCurpDtimes: {}", newCurpCrDtimes, exCurpDtimes );
+		LocalDateTime newCurpCrDt = LocalDateTime.parse(newCurpCrDtimes.trim().replace(" ", "T"), FORMATTER);
+		LocalDateTime exCurpCrDt = LocalDateTime.parse(exCurpDtimes.trim().replace(" ", "T"), FORMATTER);
 		return DateUtils.after(newCurpCrDt, exCurpCrDt);
 	}
 
