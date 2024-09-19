@@ -17,6 +17,7 @@ import io.mosip.registration.processor.core.idrepo.dto.RequestDto;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -1094,7 +1095,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 			String crDtimes = (String) identityMap.get(MappingJsonConstants.CURP_CR_DTIMES);
 			identity.put(MappingJsonConstants.PARENT_CURP_ID, identityMap.get(MappingJsonConstants.PARENT_CURP_ID));
 			identity.put(MappingJsonConstants.CURP_CR_DTIMES, crDtimes.trim());
-			identity.put(MappingJsonConstants.INDIVIDUAL_BIOMETRICS, individualBiometrics_demo);
+			identity.put(MappingJsonConstants.INDIVIDUAL_BIOMETRICS, new JSONParser().parse(individualBiometrics_demo));
 			// get latest biometric to update.
 			Documents documents = getBiometrics(regId, MappingJsonConstants.INDIVIDUAL_BIOMETRICS, regType, MappingJsonConstants.INDIVIDUAL_BIOMETRICS);
 			requestDto.setDocuments(Arrays.asList(documents));
