@@ -14,4 +14,5 @@ public class CurpBioDtorequest {
     private String statusCode;
     private String statusComment;
     private String curpStatus;
+    private Boolean isLatestBio;
 }

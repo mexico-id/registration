@@ -41,6 +41,7 @@ import io.mosip.registration.processor.status.service.RegistrationStatusService;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
 @RefreshScope
 @Service
@@ -282,14 +283,15 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 	}
 
 	private void curpBioStatusUpdate(String handle,String regType ) throws ApisResourceAccessException, IOException {
-		ArrayList<String> pathparams = new ArrayList<>();
+		List<String> pathparams = new ArrayList<>();
 		pathparams.add(handle);
 		pathparams.add(regType);
+		pathparams.add(RegistrationStatusCode.PROCESSED.name());
 		try {
-			String response = (String) registrationProcessorRestClientService.getApi(ApiName.CRUPMANAGERGET, pathparams, "", "", String.class);
-			regProcLogger.info("Received response from CRUPMANAGERGET: " + response);
+			String response = (String) registrationProcessorRestClientService.patchApi(ApiName.CURPMANAGERUPDATE, pathparams, "", "", "", String.class);
+			regProcLogger.info("Received response from CURPMANAGERUPDATE: {}", response);
 		} catch (ApisResourceAccessException e) {
-			regProcLogger.error("Error while accessing CRUPMANAGERGET API", e);
+			regProcLogger.error("Error while accessing CURPMANAGERUPDATE API", e);
 			throw e;
 		}
 	}

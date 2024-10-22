@@ -14,6 +14,7 @@ import io.mosip.registration.processor.core.curpbiomanager.CurpBioDtorequest;
 import io.mosip.registration.processor.core.idrepo.dto.IdRequestDto;
 import io.mosip.registration.processor.core.idrepo.dto.RequestDto;
 
+import io.mosip.registration.processor.packet.storage.exception.IdRepoAppException;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.json.simple.JSONObject;
@@ -114,10 +115,11 @@ import io.mosip.registration.processor.status.service.RegistrationStatusService;
 public class ManualAdjudicationServiceImpl implements ManualAdjudicationService {
 
 	private static final String CURP_ID_ACTIVATED = "CurpId Activated";
-	private static final String CURP_ID_NOT_ACTIVATED = "CurpId not activated, more than one UIN found.";
+	private static final String CURP_ID_NOT_ACTIVATED = "CurpId not activated, matched with more than one uniquely identified curp id";
 	private static final String ACTIVATED = "ACTIVATED";
 	private static final String NOT_ACTIVATED = "NOT-ACTIVATED";
-	private static final String DUPLICATE = "DUPLICATE";
+	public static final String MATCHEDCURPS = "MATCHEDCURPS";
+	public static final String ISLATEST = "ISLATEST";
 	/** The logger. */
 	private static Logger regProcLogger = RegProcessorLogger.getLogger(ManualAdjudicationServiceImpl.class);
 	private LinkedHashMap<String, Object> policies = null;
@@ -1021,13 +1023,13 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 
 		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity, uins: {}", uins.toString());
 		if (!uins.isEmpty()) {
-			List<String> matchedCurpIds = new ArrayList<>();
+			Map<String, Object> matchedCurpIds = new HashMap<>();
 			if (uins.size() == 1) {
 				matchedCurpIds = fetchHandlesAndUpdateIdentity(entity.getRegId(), uins.stream().findFirst().get(),
 						registrationStatusDto.getRegistrationType(), identityMap);
-				updateCurpManager(newCurpId, matchedCurpIds, ACTIVATED, CURP_ID_ACTIVATED, DUPLICATE);
+				updateCurpManager(newCurpId, matchedCurpIds, ACTIVATED, CURP_ID_ACTIVATED, PROCESSED);
 			} else {
-				updateCurpManager(newCurpId, matchedCurpIds, NOT_ACTIVATED, CURP_ID_NOT_ACTIVATED, DUPLICATE);
+				updateCurpManager(newCurpId, matchedCurpIds, NOT_ACTIVATED, CURP_ID_NOT_ACTIVATED, PROCESSED);
 			}
 		} else {
 			// TODO: handle the case where more than one request of the same person goes to ABIS at the same time
@@ -1038,22 +1040,23 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		regProcLogger.info("ManualAdjudication::checkAndUpdateIdentity exit.");
 	}
 
-	private void updateCurpManager(String handleId, List<String> matchedCurpIds, String statusCode, String comment, String curpStatus) throws ApisResourceAccessException {
+	private void updateCurpManager(String handleId, Map<String, Object> matchedCurpIds, String statusCode, String comment, String curpStatus) throws ApisResourceAccessException {
 
 		CurpBioDtorequest curpBioDtorequest = new CurpBioDtorequest();
 		curpBioDtorequest.setCurpId(handleId);
-		curpBioDtorequest.setMatchedCurpIds(matchedCurpIds);
+		curpBioDtorequest.setMatchedCurpIds((List<String>) matchedCurpIds.get(MATCHEDCURPS));
 		curpBioDtorequest.setStatusCode(statusCode);
 		curpBioDtorequest.setStatusComment(comment);
+		curpBioDtorequest.setIsLatestBio((Boolean) matchedCurpIds.get(ISLATEST));
 
 		curpBioDtorequest.setCurpStatus(curpStatus);
-		regProcLogger.debug("Sending POST request to API: " + ApiName.CRUPMANAGERAPI + " with request body: " + curpBioDtorequest);
-		String response = (String) registrationProcessorRestClientService.postApi(ApiName.CRUPMANAGERAPI, new ArrayList<>(), null, null, curpBioDtorequest, String.class);
+		regProcLogger.info("Sending POST request to API: " + ApiName.CURPMANAGERAPI + " with request body: " + curpBioDtorequest);
+		String response = (String) registrationProcessorRestClientService.postApi(ApiName.CURPMANAGERAPI, new ArrayList<>(), null, null, curpBioDtorequest, String.class);
 		regProcLogger.info("Received response from curp manager service : " + response);
 
 	}
 
-	private List<String> fetchHandlesAndUpdateIdentity(String regId, String uin, String regType, Map<String, String> currIdentityMap)
+	private Map<String, Object> fetchHandlesAndUpdateIdentity(String regId, String uin, String regType, Map<String, String> currIdentityMap)
 			throws Exception {
 
 		List<String> handles = new ArrayList<>();
@@ -1064,7 +1067,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		} else {
 			handles.addAll((List<String>) identityJSON.get(MappingJsonConstants.CURPID));
 		}
-		handles.add(currIdentityMap.get(MappingJsonConstants.CURPID));
+		//handles.add(currIdentityMap.get(MappingJsonConstants.CURPID));
 		String exCurpDtimes = (String) identityJSON.get(MappingJsonConstants.CURP_CR_DTIMES);
 		String newCurpCrDtimes = currIdentityMap.get(MappingJsonConstants.CURP_CR_DTIMES);
 		boolean isNewCurpLatest = isNewCurpLatest(newCurpCrDtimes, exCurpDtimes);
@@ -1073,9 +1076,11 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		IdRequestDto idRequestDto = prepareIdRepoRequest(handles, regId, uin, regType, isNewCurpLatest, currIdentityMap);
 		regProcLogger.info("ManualAdjudication::fetchHandlesAndUpdateIdentity, Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
 		ResponseDTO identityUpdateRes = idRepoService.updateIdentity(idRequestDto);
+		if (identityUpdateRes == null) {
+			throw new IdRepoAppException("Update identity failed and response is null");
+		}
 		regProcLogger.info("ManualAdjudication::fetchHandlesAndUpdateIdentity, Update Identity Response: {}", mapper.writeValueAsString(identityUpdateRes));
-
-		return handles;
+		return Map.of(MATCHEDCURPS, handles, ISLATEST, isNewCurpLatest);
 	}
 
 	private boolean isNewCurpLatest(String newCurpCrDtimes, String exCurpDtimes) {
