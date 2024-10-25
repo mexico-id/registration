@@ -286,6 +286,7 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 		CurpBioDtorequest curpBioDtorequest = new CurpBioDtorequest();
 		curpBioDtorequest.setCurpId(handle);
 		curpBioDtorequest.setCurpType(regType);
+		curpBioDtorequest.setIsLatestBio(Boolean.TRUE);
 		curpBioDtorequest.setCurpStatus(RegistrationStatusCode.PROCESSED.name());
 
 		try {
