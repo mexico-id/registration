@@ -5,6 +5,7 @@ import io.mosip.registration.processor.core.constant.*;
 import io.mosip.registration.processor.core.constant.EventId;
 import io.mosip.registration.processor.core.constant.EventName;
 import io.mosip.registration.processor.core.constant.EventType;
+import io.mosip.registration.processor.core.curpbiomanager.CurpBioDtorequest;
 import io.mosip.registration.processor.core.spi.restclient.RegistrationProcessorRestClientService;
 import io.mosip.registration.processor.packet.storage.utils.PriorityBasedPacketManagerService;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -41,7 +42,6 @@ import io.mosip.registration.processor.status.service.RegistrationStatusService;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.List;
 
 @RefreshScope
 @Service
@@ -283,12 +283,13 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 	}
 
 	private void curpBioStatusUpdate(String handle,String regType ) throws ApisResourceAccessException, IOException {
-		List<String> pathparams = new ArrayList<>();
-		pathparams.add(handle);
-		pathparams.add(regType);
-		pathparams.add(RegistrationStatusCode.PROCESSED.name());
+		CurpBioDtorequest curpBioDtorequest = new CurpBioDtorequest();
+		curpBioDtorequest.setCurpId(handle);
+		curpBioDtorequest.setCurpType(regType);
+		curpBioDtorequest.setCurpStatus(RegistrationStatusCode.PROCESSED.name());
+
 		try {
-			String response = (String) registrationProcessorRestClientService.patchApi(ApiName.CURPMANAGERUPDATE, pathparams, "", "", "", String.class);
+			String response = (String) registrationProcessorRestClientService.postApi(ApiName.CURPMANAGERUPDATE, new ArrayList<>(), "", "", curpBioDtorequest, String.class);
 			regProcLogger.info("Received response from CURPMANAGERUPDATE: {}", response);
 		} catch (ApisResourceAccessException e) {
 			regProcLogger.error("Error while accessing CURPMANAGERUPDATE API", e);
