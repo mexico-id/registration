@@ -1,5 +1,6 @@
 package io.mosip.registration.processor.stages.finalization.stage;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mosip.registration.processor.core.code.*;
 import io.mosip.registration.processor.core.constant.*;
 import io.mosip.registration.processor.core.constant.EventId;
@@ -102,7 +103,9 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 	private AuditLogRequestBuilder auditLogRequestBuilder;
 	@Autowired
 	private PriorityBasedPacketManagerService packetManagerService;
-	
+	@Autowired
+	private ObjectMapper mapper;
+
 	@Override
 	protected String getPropertyPrefix() {
 		// TODO Auto-generated method stub
@@ -286,10 +289,11 @@ public class FinalizationStage extends MosipVerticleAPIManager{
 		CurpBioDtorequest curpBioDtorequest = new CurpBioDtorequest();
 		curpBioDtorequest.setCurpId(handle);
 		curpBioDtorequest.setCurpType(regType);
-		curpBioDtorequest.setIsLatestBio(Boolean.TRUE);
+		curpBioDtorequest.setIsLatestBio(true);
 		curpBioDtorequest.setCurpStatus(RegistrationStatusCode.PROCESSED.name());
 
 		try {
+			regProcLogger.info("Update request for CURPMANAGERUPDATE: {}", mapper.writeValueAsString(curpBioDtorequest));
 			String response = (String) registrationProcessorRestClientService.postApi(ApiName.CURPMANAGERUPDATE, new ArrayList<>(), "", "", curpBioDtorequest, String.class);
 			regProcLogger.info("Received response from CURPMANAGERUPDATE: {}", response);
 		} catch (ApisResourceAccessException e) {
