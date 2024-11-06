@@ -1067,7 +1067,6 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		} else {
 			handles.addAll((List<String>) identityJSON.get(MappingJsonConstants.CURPID));
 		}
-		//handles.add(currIdentityMap.get(MappingJsonConstants.CURPID));
 		String exCurpDtimes = (String) identityJSON.get(MappingJsonConstants.CURP_CR_DTIMES);
 		String newCurpCrDtimes = currIdentityMap.get(MappingJsonConstants.CURP_CR_DTIMES);
 		boolean isNewCurpLatest = isNewCurpLatest(newCurpCrDtimes, exCurpDtimes);
@@ -1076,10 +1075,12 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		IdRequestDto idRequestDto = prepareIdRepoRequest(handles, regId, uin, regType, isNewCurpLatest, currIdentityMap);
 		regProcLogger.info("ManualAdjudication::fetchHandlesAndUpdateIdentity, Update Identity Request: {}", mapper.writeValueAsString(idRequestDto));
 		ResponseDTO identityUpdateRes = idRepoService.updateIdentity(idRequestDto);
-		if (identityUpdateRes == null) {
-			throw new IdRepoAppException("Update identity failed and response is null");
+		if (identityUpdateRes == null || !ACTIVATED.equalsIgnoreCase(identityUpdateRes.getStatus())) {
+			regProcLogger.error("Update identity failed and response is: {}", mapper.writeValueAsString(identityUpdateRes));
+			throw new IdRepoAppException("Update identity failed.");
 		}
 		regProcLogger.info("ManualAdjudication::fetchHandlesAndUpdateIdentity, Update Identity Response: {}", mapper.writeValueAsString(identityUpdateRes));
+		handles.remove(currIdentityMap.get(MappingJsonConstants.CURPID));
 		return Map.of(MATCHEDCURPS, handles, ISLATEST, isNewCurpLatest);
 	}
 
@@ -1096,6 +1097,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 		RequestDto requestDto = new RequestDto();
 		Map<String, Object> identity = new HashMap<>();
 		requestDto.setRegistrationId(regId);
+		matchedCurpIds.add(identityMap.get(MappingJsonConstants.CURPID));
 		if(isNewCurpLatest) {
 			String crDtimes = (String) identityMap.get(MappingJsonConstants.CURP_CR_DTIMES);
 			identity.put(MappingJsonConstants.PARENT_CURP_ID, identityMap.get(MappingJsonConstants.PARENT_CURP_ID));
